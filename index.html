@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>ระบบรีวิวร้านค้าสุดคิวท์ - ธีมเจ้าหญิง</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- เพิ่ม Supabase JS SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -47,7 +49,6 @@
         body {
             font-family: 'Fredoka', 'Prompt', sans-serif;
             background-color: #FFE4EE; 
-            /* ปรับความสว่างของลายจุดให้จางลง (opacity 0.15) */
             background-image: radial-gradient(rgba(148, 138, 127, 0.15) 3px, transparent 3px); 
             background-size: 30px 30px;
             color: #948A7F; 
@@ -89,12 +90,16 @@
             letter-spacing: 0.5px;
             color: #948A7F !important;
         }
-        .btn-cute:hover {
+        .btn-cute:hover:not(:disabled) {
             transform: translateY(-2px);
             box-shadow: 0 8px 15px rgba(148, 138, 127, 0.15);
         }
-        .btn-cute:active {
+        .btn-cute:active:not(:disabled) {
             transform: translateY(0);
+        }
+        .btn-cute:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
         }
 
         .marquee-container {
@@ -154,13 +159,11 @@
             box-shadow: 0 4px 12px rgba(148, 138, 127, 0.12);
         }
 
-        /* เอาโค้ด .bg-icon และ @keyframes floatUp ออก */
-
         .burst-icon {
             position: fixed;
             pointer-events: none;
             z-index: 9999;
-            color: #948A7F; /* เปลี่ยนสีไอคอนกระจายเป็นสีตัวอักษร #948A7F */
+            color: #948A7F; 
             animation: burstAnim 0.8s ease-out forwards;
         }
         @keyframes burstAnim {
@@ -195,9 +198,26 @@
         .text-white {
             color: #948A7F !important;
         }
+        
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(4px);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
     </style>
 </head>
 <body class="pb-28 relative">
+
+    <div id="mainLoading" class="loading-overlay hidden-view">
+        <i class="fas fa-crown text-5xl text-pink-400 mb-4 animate-bounce"></i>
+        <p class="text-stone-600 font-bold" id="loadingText">กำลังเชื่อมต่อข้อมูลเวทมนตร์...</p>
+    </div>
 
     <button id="musicToggleBtn" onclick="toggleMusic()" class="fixed top-4 right-4 z-[90] bg-white text-pink-400 w-12 h-12 rounded-full shadow-[0_4px_12px_rgba(120,113,108,0.2)] flex items-center justify-center border-2 border-pink-100 transition-transform hover:scale-110">
         <i class="fas fa-music text-xl"></i>
@@ -207,11 +227,10 @@
 
     <div id="customModal" class="fixed inset-0 z-[100] flex items-center justify-center hidden-view bg-stone-900 bg-opacity-30 backdrop-blur-sm">
         <div class="cute-box p-6 max-w-sm w-full mx-4 text-center transform scale-95 transition-transform duration-300" id="modalContent">
-            <i class="fas fa-crown text-5xl text-pink-400 mb-4 animate-bounce"></i>
+            <i class="fas fa-crown text-5xl text-pink-400 mb-4 animate-bounce" id="modalIcon"></i>
             <h3 class="text-xl font-bold mb-2 text-stone-700" id="modalTitle">แจ้งเตือน</h3>
             <p class="text-stone-500 mb-6 font-medium" id="modalMessage">ข้อความ</p>
             <div class="flex justify-center gap-4" id="modalActions">
-                <!-- Actions rendered by JS -->
             </div>
         </div>
     </div>
@@ -255,17 +274,16 @@
                         <i class="fas fa-heart"></i> เปิดบริการ
                     </div>
                 </div>
-                <h1 id="c_shopName" class="text-3xl font-bold text-stone-700 mb-2 relative z-10 tracking-tight">ชื่อร้านค้า</h1>
-                <p id="c_shopDesc" class="text-pink-600 font-medium text-sm mb-6 relative z-10 px-4">รายละเอียดร้านค้า...</p>
+                <h1 id="c_shopName" class="text-3xl font-bold text-stone-700 mb-2 relative z-10 tracking-tight">กำลังโหลด...</h1>
+                <p id="c_shopDesc" class="text-pink-600 font-medium text-sm mb-6 relative z-10 px-4">กำลังโหลดข้อมูลร้านค้า...</p>
                 
                 <div class="marquee-container text-stone-600 text-sm flex items-center font-medium shadow-inner relative z-10">
-                    <!-- ลบพื้นหลังของโทรโข่งออกให้เหลือแค่ตัวไอคอน -->
                     <i class="fas fa-bullhorn mr-2 z-10 text-pink-600 text-lg bg-transparent"></i>
-                    <div class="marquee-content w-full" id="c_marqueeText">ยินดีต้อนรับสู่ร้านของเราค่ะ!</div>
+                    <div class="marquee-content w-full" id="c_marqueeText">กรุณารอสักครู่...</div>
                 </div>
             </div>
 
-            <div id="c_bannerContainer" class="cute-box overflow-hidden group relative p-1 bg-white">
+            <div id="c_bannerContainer" class="cute-box overflow-hidden group relative p-1 bg-white hidden-view">
                 <div class="absolute inset-0 bg-pink-100 opacity-0 group-hover:opacity-20 transition duration-300 z-10 rounded-2xl"></div>
                 <img id="c_bannerImg" src="" alt="Banner" class="w-full h-56 object-cover rounded-[1.2rem] transform group-hover:scale-105 transition duration-500">
             </div>
@@ -363,7 +381,7 @@
                     </div>
                 </div>
 
-                <button onclick="submitReview()" class="w-full btn-cute bg-gradient-to-r from-pink-400 to-pink-500 text-white py-4 rounded-xl text-lg font-bold shadow-lg flex justify-center items-center gap-2 relative z-10">
+                <button id="btnSubmitReview" onclick="submitReview()" class="w-full btn-cute bg-gradient-to-r from-pink-400 to-pink-500 text-white py-4 rounded-xl text-lg font-bold shadow-lg flex justify-center items-center gap-2 relative z-10">
                     <i class="fas fa-paper-plane"></i> ส่งรีวิวเลย!
                 </button>
             </div>
@@ -374,7 +392,7 @@
                     <h3 class="text-lg font-bold text-stone-700">รีวิวจากลูกค้าทั้งหมด</h3>
                 </div>
                 <div id="c_reviewList" class="space-y-4">
-                    <!-- JS renders reviews here -->
+                    <div class="text-center text-stone-400 text-sm py-4"><i class="fas fa-spinner fa-spin mr-2"></i> กำลังโหลดรีวิว...</div>
                 </div>
             </div>
         </div>
@@ -391,7 +409,7 @@
                 <p class="text-sm font-medium text-stone-500 mb-8 relative z-10">หากมีข้อสงสัยหรือต้องการสั่งซื้อ ติดต่อเราได้เลยค่ะ</p>
                 
                 <div id="c_contactList" class="space-y-4 text-left relative z-10">
-                    <!-- Rendered dynamically -->
+                    <div class="text-center text-stone-400 text-sm py-4"><i class="fas fa-spinner fa-spin mr-2"></i> กำลังโหลดข้อมูลติดต่อ...</div>
                 </div>
             </div>
         </div>
@@ -409,10 +427,10 @@
                 
                 <div class="space-y-5 text-left relative z-10">
                     <div>
-                        <label class="block text-sm font-bold text-stone-600 mb-2"><i class="fas fa-user-shield text-pink-400 mr-1"></i> Username</label>
+                        <label class="block text-sm font-bold text-stone-600 mb-2"><i class="fas fa-envelope text-pink-400 mr-1"></i> Email</label>
                         <div class="relative">
                             <i class="fas fa-user absolute left-4 top-3.5 text-stone-400"></i>
-                            <input type="text" id="loginUsername" class="w-full bg-stone-50 border border-stone-200 rounded-xl pl-11 pr-4 py-3 text-sm focus:bg-white focus:border-pink-300 focus:outline-none transition font-medium text-stone-700" placeholder="admin">
+                            <input type="email" id="loginUsername" class="w-full bg-stone-50 border border-stone-200 rounded-xl pl-11 pr-4 py-3 text-sm focus:bg-white focus:border-pink-300 focus:outline-none transition font-medium text-stone-700" placeholder="admin@example.com">
                         </div>
                     </div>
                     <div>
@@ -422,7 +440,7 @@
                             <input type="password" id="loginPassword" class="w-full bg-stone-50 border border-stone-200 rounded-xl pl-11 pr-4 py-3 text-sm focus:bg-white focus:border-pink-300 focus:outline-none transition font-medium text-stone-700" placeholder="password">
                         </div>
                     </div>
-                    <button onclick="attemptLogin()" class="w-full btn-cute bg-gradient-to-r from-pink-400 to-pink-500 text-white py-4 rounded-xl shadow-md mt-6 flex items-center justify-center gap-2 font-bold text-lg">
+                    <button id="btnLogin" onclick="attemptLogin()" class="w-full btn-cute bg-gradient-to-r from-pink-400 to-pink-500 text-white py-4 rounded-xl shadow-md mt-6 flex items-center justify-center gap-2 font-bold text-lg">
                         <i class="fas fa-sign-in-alt"></i> เข้าสู่ระบบ
                     </button>
                 </div>
@@ -469,7 +487,7 @@
                         <img id="a_profilePreview" src="" class="w-24 h-24 rounded-full object-cover border-4 border-white shadow-sm">
                         <div class="flex-1 w-full">
                             <label class="block text-sm font-bold text-stone-600 mb-2">เปลี่ยนรูปโปรไฟล์ร้าน</label>
-                            <input type="file" id="a_profileInput" accept="image/*" class="w-full text-sm text-stone-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-pink-50 file:text-pink-500 hover:file:bg-pink-100 transition cursor-pointer" onchange="handleImagePreview(this, 'a_profilePreview', true, 'profilePic')">
+                            <input type="file" id="a_profileInput" accept="image/*" class="w-full text-sm text-stone-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-pink-50 file:text-pink-500 hover:file:bg-pink-100 transition cursor-pointer" onchange="handleImagePreview(this, 'a_profilePreview', true, 'profile_pic')">
                         </div>
                     </div>
                     <div>
@@ -493,9 +511,9 @@
                             </label>
                         </div>
                         <img id="a_bannerPreview" src="" class="w-full h-32 object-cover rounded-lg border border-stone-200 shadow-sm mb-3">
-                        <input type="file" id="a_bannerInput" accept="image/*" class="w-full text-sm text-stone-500 file:mr-4 file:py-1.5 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-white file:text-stone-600 hover:file:bg-stone-100 shadow-sm transition cursor-pointer" onchange="handleImagePreview(this, 'a_bannerPreview', true, 'bannerImg')">
+                        <input type="file" id="a_bannerInput" accept="image/*" class="w-full text-sm text-stone-500 file:mr-4 file:py-1.5 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-white file:text-stone-600 hover:file:bg-stone-100 shadow-sm transition cursor-pointer" onchange="handleImagePreview(this, 'a_bannerPreview', true, 'banner_img')">
                     </div>
-                    <button onclick="saveShopSettings()" class="w-full btn-cute bg-gradient-to-r from-pink-400 to-pink-500 text-white py-3 rounded-xl shadow-md text-sm font-bold mt-2">
+                    <button id="btnSaveShop" onclick="saveShopSettings()" class="w-full btn-cute bg-gradient-to-r from-pink-400 to-pink-500 text-white py-3 rounded-xl shadow-md text-sm font-bold mt-2">
                         <i class="fas fa-save mr-2"></i> บันทึกข้อมูลร้านค้า
                     </button>
                 </div>
@@ -523,7 +541,7 @@
                             <input type="number" id="a_musicStart" placeholder="0" min="0" class="w-full border border-stone-200 rounded-xl pl-10 pr-4 py-2.5 text-sm font-medium focus:border-pink-300 focus:outline-none transition text-stone-700 bg-stone-50 focus:bg-white">
                         </div>
                     </div>
-                    <button onclick="saveMusicSettings()" class="w-full btn-cute bg-gradient-to-r from-pink-400 to-pink-500 text-white py-3 rounded-xl shadow-md text-sm font-bold">
+                    <button id="btnSaveMusic" onclick="saveMusicSettings()" class="w-full btn-cute bg-gradient-to-r from-pink-400 to-pink-500 text-white py-3 rounded-xl shadow-md text-sm font-bold">
                         <i class="fas fa-save mr-2"></i> บันทึกการตั้งค่าเพลง
                     </button>
                 </div>
@@ -536,7 +554,7 @@
                     <span class="text-xs font-bold bg-pink-50 text-pink-500 border border-pink-100 px-3 py-1.5 rounded-full" id="a_reviewCountBadge">0 รายการ</span>
                 </div>
                 <div id="a_reviewList" class="space-y-4 relative z-10">
-                    <!-- JS renders admin reviews here -->
+                    <div class="text-center text-stone-400 text-sm py-4"><i class="fas fa-spinner fa-spin mr-2"></i> กำลังโหลดรีวิว...</div>
                 </div>
             </div>
 
@@ -567,7 +585,7 @@
                                 <label class="block text-xs font-bold text-stone-600 mb-1">ลิงก์ (URL)</label>
                                 <input type="url" id="newContactLink" placeholder="https://..." class="w-full border border-stone-200 rounded-xl px-3 py-2 text-sm focus:border-pink-300 focus:outline-none text-stone-700 bg-white">
                             </div>
-                            <button onclick="addContact()" class="w-full btn-cute bg-stone-700 text-white py-2 rounded-xl hover:bg-stone-800 text-sm font-bold shadow-md">
+                            <button id="btnAddContact" onclick="addContact()" class="w-full btn-cute bg-stone-700 text-white py-2 rounded-xl hover:bg-stone-800 text-sm font-bold shadow-md">
                                 เพิ่มช่องทาง
                             </button>
                         </div>
@@ -578,6 +596,7 @@
     </div>
 
     <script>
+        // กำหนดข้อมูล Platforms สำหรับ Contact
         const platforms = {
             facebook: { icon: 'fab fa-facebook-f', color: 'text-blue-500 bg-blue-50 border-blue-100', name: 'Facebook' },
             line: { icon: 'fab fa-line', color: 'text-green-500 bg-green-50 border-green-100', name: 'Line Official' },
@@ -587,58 +606,17 @@
             website: { icon: 'fas fa-globe', color: 'text-purple-500 bg-purple-50 border-purple-100', name: 'Website' }
         };
 
-        const defaultData = {
-            shopInfo: {
-                name: "Princess Bakery",
-                desc: "เบเกอรี่โฮมเมดสไตล์เจ้าหญิง หวานน้อยอร่อยมาก",
-                marqueeText: "โปรโมชั่นพิเศษ! สั่งซื้อครบ 300 บาท ส่งฟรีถึงปราสาท | ลด 10% ทุกเมนูเค้ก",
-                profilePic: "https://placehold.co/300x300/fbcfe8/ffffff?text=Princess",
-                bannerImg: "https://placehold.co/800x300/fdf2f8/f472b6?text=Promotion+Banner+10%25+Off",
-                showBanner: true
-            },
-            contact: [
-                { id: 1, type: "facebook", link: "https://facebook.com/PrincessBakery" },
-                { id: 2, type: "line", link: "https://line.me/R/ti/p/@princess" },
-                { id: 3, type: "instagram", link: "https://instagram.com/princessbakery" }
-            ],
-            music: {
-                url: "https://www.youtube.com/watch?v=jfKfPfyJRdk",
-                videoId: "jfKfPfyJRdk",
-                startTime: 0
-            },
-            reviews: [
-                {
-                    id: 1713000000000,
-                    name: "เจ้าหญิงมะลิ",
-                    hideName: false,
-                    score: 1,
-                    text: "เค้กอร่อยมากกกก แพ็คเกจก็น่ารัก พนักงานบริการดีค่ะ ไว้จะมาอุดหนุนอีกนะคะ",
-                    image: "https://placehold.co/400x400/fbcfe8/f472b6?text=Yummy+Cake",
-                    reply: "ขอบคุณเจ้าหญิงมะลิมากๆ ค่ะ โอกาสหน้าเชิญใหม่นะคะ ยินดีให้บริการค่ะ",
-                    timestamp: 1713000000000
-                },
-                {
-                    id: 1713080000000,
-                    name: "ลูกค้าท่านหนึ่ง",
-                    hideName: true,
-                    score: -1,
-                    text: "รอนานไปหน่อยค่ะ สั่งกาแฟไปแก้วเดียวรอเกือบครึ่งชั่วโมง",
-                    image: "https://placehold.co/400x400/f5f5f4/a8a29e?text=Coffee",
-                    reply: "ทางร้านต้องขออภัยในความล่าช้าด้วยนะคะ วันนั้นออเดอร์ค่อนข้างเยอะ จะนำไปปรับปรุงระบบจัดการให้เร็วกว่านี้ค่ะ",
-                    timestamp: 1713080000000
-                }
-            ]
+        // ตั้งค่า Supabase (ใช้เฉพาะ Project URL และ Anon Key)
+        const SUPABASE_URL = 'https://skizygzfvajapehhsmaz.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNraXp5Z3pmdmFqYXBlaGhzbWF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3MTMyMTIsImV4cCI6MjEwNzI4OTIxMn0.-WQTBKLK0lWm14yLuYQAlUQ9ADAsk4PF1XaFC5_0PTI';
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // State ข้อมูล
+        let appData = {
+            shopInfo: {},
+            contact: [],
+            reviews: []
         };
-
-        let appData = JSON.parse(localStorage.getItem('cuteShopData')) || defaultData;
-
-        if (appData.contact && !Array.isArray(appData.contact)) {
-            const oldContact = appData.contact;
-            appData.contact = [];
-            if (oldContact.facebook) appData.contact.push({ id: 1, type: "facebook", link: oldContact.facebook });
-            if (oldContact.line) appData.contact.push({ id: 2, type: "line", link: oldContact.line });
-            if (oldContact.phone) appData.contact.push({ id: 3, type: "instagram", link: "https://instagram.com/" }); 
-        }
 
         let isLoggedIn = false;
         let ytPlayer;
@@ -646,28 +624,93 @@
         let isPlayerReady = false;
         let hasUserInteracted = false;
 
-        const tag = document.createElement('script');
-        tag.src = "https://www.youtube.com/iframe_api";
-        const firstScriptTag = document.getElementsByTagName('script')[0];
-        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+        // Escape HTML ป้องกัน XSS
+        function escapeHTML(str) {
+            if (!str) return '';
+            return str.replace(/[&<>'"]/g, 
+                tag => ({
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    "'": '&#39;',
+                    '"': '&quot;'
+                }[tag])
+            );
+        }
 
-        function onYouTubeIframeAPIReady() {
-            if(appData.music.videoId) {
-                initMusicPlayer();
+        // จัดการสถานะปุ่มโหลด (ป้องกันกดซ้ำ)
+        function setBtnLoading(btnId, isLoading, defaultHtml) {
+            const btn = document.getElementById(btnId);
+            if (!btn) return;
+            if (isLoading) {
+                btn.disabled = true;
+                btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> กำลังดำเนินการ...`;
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = defaultHtml;
             }
+        }
+
+        // โหลดข้อมูลทั้งหมดจาก Supabase เมื่อเปิดเว็บ
+        async function fetchAllData() {
+            document.getElementById('mainLoading').classList.remove('hidden-view');
+            try {
+                // ดึงข้อมูล 3 ตารางพร้อมกัน
+                const [shopRes, contactRes, reviewRes] = await Promise.all([
+                    supabaseClient.from('shop_settings').select('*').limit(1).single(),
+                    supabaseClient.from('contacts').select('*').order('created_at', { ascending: true }),
+                    supabaseClient.from('reviews').select('*').order('created_at', { ascending: false })
+                ]);
+
+                if (shopRes.data) appData.shopInfo = shopRes.data;
+                if (contactRes.data) appData.contact = contactRes.data;
+                if (reviewRes.data) appData.reviews = reviewRes.data;
+
+                renderApp();
+
+                // Setup YouTube Player ถ้ามีข้อมูล
+                if (appData.shopInfo.music_video_id) {
+                    const tag = document.createElement('script');
+                    tag.src = "https://www.youtube.com/iframe_api";
+                    const firstScriptTag = document.getElementsByTagName('script')[0];
+                    firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+                    // YouTube API จะเรียก onYouTubeIframeAPIReady เอง
+                }
+
+                // Check Session แอดมินว่าล็อกอินค้างไว้ไหม
+                await checkAdminSession();
+
+            } catch (error) {
+                console.error("Error loading data:", error);
+                showMessage("เกิดข้อผิดพลาด", "ไม่สามารถโหลดข้อมูลจากระบบได้ กรุณาลองใหม่อีกครั้ง");
+            } finally {
+                document.getElementById('mainLoading').classList.add('hidden-view');
+            }
+        }
+
+        // ตรวจสอบสิทธิ์ Admin (Session และ RPC)
+        async function checkAdminSession() {
+            const { data: sessionData } = await supabaseClient.auth.getSession();
+            if (sessionData.session) {
+                const { data: isAdmin, error } = await supabaseClient.rpc('is_admin');
+                if (isAdmin && !error) {
+                    isLoggedIn = true;
+                    return true;
+                } else {
+                    await supabaseClient.auth.signOut();
+                    isLoggedIn = false;
+                }
+            }
+            return false;
         }
 
         window.onload = function() {
             initEffects();
-            renderApp();
+            fetchAllData();
         };
 
-        function saveData() {
-            localStorage.setItem('cuteShopData', JSON.stringify(appData));
-            renderApp();
-        }
-
-        function switchClientTab(tabName) {
+        // สลับแท็บลูกค้า
+        async function switchClientTab(tabName) {
             ['home', 'review', 'contact', 'admin'].forEach(tab => {
                 document.getElementById(`nav_${tab}`).classList.remove('active');
             });
@@ -681,7 +724,11 @@
             document.getElementById(`nav_${tabName}`).classList.add('active');
 
             if(tabName === 'admin') {
-                if(isLoggedIn) {
+                document.getElementById('mainLoading').classList.remove('hidden-view');
+                const isAdmin = await checkAdminSession();
+                document.getElementById('mainLoading').classList.add('hidden-view');
+
+                if(isAdmin) {
                     document.getElementById('view_admin_panel').classList.remove('hidden-view');
                     renderAdminSettings();
                 } else {
@@ -695,6 +742,7 @@
             }
         }
 
+        // สลับแท็บแอดมิน
         function switchAdminTab(tabName) {
             ['shop', 'music', 'review', 'contact'].forEach(tab => {
                 document.getElementById(`adm_tab_${tab}`).classList.remove('active');
@@ -704,21 +752,44 @@
             document.getElementById(`adm_sect_${tabName}`).classList.remove('hidden-view');
         }
 
-        function attemptLogin() {
-            const user = document.getElementById('loginUsername').value;
+        // ล็อกอิน
+        async function attemptLogin() {
+            const email = document.getElementById('loginUsername').value;
             const pass = document.getElementById('loginPassword').value;
 
-            if (user === 'admin' && pass === 'password') {
-                isLoggedIn = true;
+            if(!email || !pass) {
+                showMessage("ข้อมูลไม่ครบ", "กรุณากรอกอีเมลและรหัสผ่าน");
+                return;
+            }
+
+            setBtnLoading('btnLogin', true, '<i class="fas fa-sign-in-alt"></i> เข้าสู่ระบบ');
+
+            const { data, error } = await supabaseClient.auth.signInWithPassword({
+                email: email,
+                password: pass
+            });
+
+            if (error) {
+                setBtnLoading('btnLogin', false, '<i class="fas fa-sign-in-alt"></i> เข้าสู่ระบบ');
+                showMessage("เข้าสู่ระบบไม่สำเร็จ", "อีเมลหรือรหัสผ่านไม่ถูกต้อง");
+                return;
+            }
+
+            // ตรวจสอบสิทธิ์ว่าใช่ Admin ในตารางไหม
+            const isAdmin = await checkAdminSession();
+            setBtnLoading('btnLogin', false, '<i class="fas fa-sign-in-alt"></i> เข้าสู่ระบบ');
+
+            if (isAdmin) {
                 document.getElementById('loginUsername').value = '';
                 document.getElementById('loginPassword').value = '';
                 switchClientTab('admin');
             } else {
-                showMessage("เข้าสู่ระบบไม่สำเร็จ", "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้องค่ะ");
+                showMessage("ไม่มีสิทธิ์เข้าถึง", "บัญชีนี้ไม่ใช่ผู้ดูแลระบบ");
             }
         }
 
-        function logout() {
+        async function logout() {
+            await supabaseClient.auth.signOut();
             isLoggedIn = false;
             switchClientTab('home');
         }
@@ -770,6 +841,7 @@
             tempReviewImageBase64 = null;
         }
 
+        // แสดงผลหน้าแอพหลัก
         function renderApp() {
             let goodCount = 0; let badCount = 0;
             appData.reviews.forEach(r => {
@@ -778,21 +850,22 @@
             });
             let total = goodCount - badCount;
 
-            document.getElementById('c_profilePic').src = appData.shopInfo.profilePic;
-            document.getElementById('c_shopName').innerText = appData.shopInfo.name;
-            document.getElementById('c_shopDesc').innerText = appData.shopInfo.desc;
-            document.getElementById('c_marqueeText').innerText = appData.shopInfo.marqueeText;
+            const sInfo = appData.shopInfo;
+            document.getElementById('c_profilePic').src = sInfo.profile_pic || 'https://placehold.co/300x300/fbcfe8/ffffff?text=Shop';
+            document.getElementById('c_shopName').textContent = sInfo.name || 'ไม่มีชื่อร้าน';
+            document.getElementById('c_shopDesc').textContent = sInfo.description || '';
+            document.getElementById('c_marqueeText').textContent = sInfo.marquee_text || 'ยินดีต้อนรับ';
             
             const bannerContainer = document.getElementById('c_bannerContainer');
-            if (appData.shopInfo.showBanner) {
+            if (sInfo.show_banner) {
                 bannerContainer.classList.remove('hidden');
-                document.getElementById('c_bannerImg').src = appData.shopInfo.bannerImg;
+                document.getElementById('c_bannerImg').src = sInfo.banner_img || '';
             } else {
                 bannerContainer.classList.add('hidden');
             }
 
-            document.getElementById('c_totalReviews').innerText = appData.reviews.length;
-            document.getElementById('c_totalScore').innerText = total > 0 ? "+" + total : total;
+            document.getElementById('c_totalReviews').textContent = appData.reviews.length;
+            document.getElementById('c_totalScore').textContent = total > 0 ? "+" + total : total;
 
             renderClientContacts();
             renderClientReviews();
@@ -807,13 +880,16 @@
                 return;
             }
             appData.contact.forEach(c => {
-                const plat = platforms[c.type] || platforms.website;
+                const plat = platforms[c.platform] || platforms.website;
+                const safeUrl = escapeHTML(c.url);
+                const safeName = escapeHTML(plat.name);
+                
                 const html = `
-                    <a href="${c.link}" target="_blank" class="flex items-center p-4 bg-white border border-stone-100 rounded-2xl hover:shadow-md hover:border-pink-200 transition group shadow-sm">
+                    <a href="${safeUrl}" target="_blank" class="flex items-center p-4 bg-white border border-stone-100 rounded-2xl hover:shadow-md hover:border-pink-200 transition group shadow-sm">
                         <div class="w-12 h-12 rounded-full flex items-center justify-center text-2xl mr-4 group-hover:scale-110 transition shadow-sm ${plat.color}"><i class="${plat.icon}"></i></div>
                         <div>
-                            <div class="text-xs font-bold text-stone-400 mb-0.5">${plat.name}</div>
-                            <div class="text-sm font-bold text-stone-700">ไปที่ ${plat.name}</div>
+                            <div class="text-xs font-bold text-stone-400 mb-0.5">${safeName}</div>
+                            <div class="text-sm font-bold text-stone-700">คลิกเพื่อไปยังช่องทางนี้</div>
                         </div>
                     </a>
                 `;
@@ -841,16 +917,22 @@
                 return;
             }
 
-            const sortedReviews = [...appData.reviews].sort((a, b) => b.timestamp - a.timestamp);
-            sortedReviews.forEach(review => {
-                const date = new Date(review.timestamp).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' });
-                const displayName = review.hideName ? "คุณลูกค้าลับ <i class='fas fa-user-secret ml-1 text-stone-400'></i>" : review.name;
+            appData.reviews.forEach(review => {
+                const date = new Date(review.created_at).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' });
+                
+                // Sanitization
+                const safeName = escapeHTML(review.customer_name);
+                const safeText = escapeHTML(review.review_text);
+                const safeReply = escapeHTML(review.reply_text);
+                const safeImg = escapeHTML(review.image_url);
+
+                const displayName = review.hide_name ? "คุณลูกค้าลับ <i class='fas fa-user-secret ml-1 text-stone-400'></i>" : safeName;
                 const scoreIcon = review.score === 1 ? 
                     '<i class="fas fa-smile-beam text-emerald-400 bg-emerald-50 border border-emerald-100 w-6 h-6 flex items-center justify-center rounded-full text-xs"></i>' : 
                     '<i class="fas fa-sad-tear text-stone-400 bg-stone-50 border border-stone-100 w-6 h-6 flex items-center justify-center rounded-full text-xs"></i>';
 
                 let replyHTML = '';
-                if (review.reply) {
+                if (safeReply) {
                     replyHTML = `
                         <div class="mt-4 bg-pink-50 rounded-xl p-4 border border-pink-100 relative shadow-sm">
                             <div class="absolute -top-2 left-6 w-4 h-4 bg-pink-50 transform rotate-45 border-l border-t border-pink-100"></div>
@@ -858,7 +940,7 @@
                                 <div class="w-6 h-6 rounded-full bg-pink-400 text-white flex items-center justify-center text-[10px] shadow-sm"><i class="fas fa-crown"></i></div>
                                 <span class="text-xs font-bold text-stone-700">เจ้าของร้านตอบกลับ</span>
                             </div>
-                            <p class="text-sm font-medium text-stone-600 ml-1">${review.reply}</p>
+                            <p class="text-sm font-medium text-stone-600 ml-1">${safeReply}</p>
                         </div>
                     `;
                 }
@@ -879,14 +961,14 @@
                             </div>
                         </div>
                         <div class="cursor-pointer" onclick="toggleReviewDetails(${review.id})">
-                            <p class="text-sm font-medium text-stone-600 ml-1 leading-relaxed"><i class="fas fa-quote-left text-pink-200 mr-2 text-xs"></i>${review.text || '-'}</p>
+                            <p class="text-sm font-medium text-stone-600 ml-1 leading-relaxed"><i class="fas fa-quote-left text-pink-200 mr-2 text-xs"></i>${safeText || '-'}</p>
                             <div class="text-center mt-3 text-xs font-bold text-stone-500 bg-stone-50 py-1.5 rounded-lg border border-stone-100 hover:bg-stone-100 transition flex items-center justify-center gap-2">
                                 แตะเพื่อดูรูปภาพและคำตอบกลับ <i id="review_icon_${review.id}" class="fas fa-chevron-down expand-icon text-pink-400"></i>
                             </div>
                         </div>
                         
                         <div id="review_details_${review.id}" class="review-details">
-                            ${review.image ? `<img src="${review.image}" class="w-full h-48 object-cover rounded-xl mt-2 mb-2 border border-stone-100 shadow-sm">` : ''}
+                            ${safeImg ? `<img src="${safeImg}" class="w-full h-48 object-cover rounded-xl mt-2 mb-2 border border-stone-100 shadow-sm">` : ''}
                             ${replyHTML}
                         </div>
                     </div>
@@ -895,7 +977,8 @@
             });
         }
 
-        function submitReview() {
+        // บันทึกรีวิวลง Supabase
+        async function submitReview() {
             const scoreRadio = document.querySelector('input[name="reviewScore"]:checked');
             const nameInput = document.getElementById('reviewName').value.trim();
             const hideName = document.getElementById('reviewHideName').checked;
@@ -920,50 +1003,79 @@
             }
 
             const newReview = {
-                id: Date.now(),
-                name: finalName,
-                hideName: hideName,
+                customer_name: finalName,
+                hide_name: hideName,
                 score: parseInt(scoreRadio.value),
-                text: textInput,
-                image: tempReviewImageBase64,
-                reply: "",
-                timestamp: Date.now()
+                review_text: textInput,
+                image_url: tempReviewImageBase64
             };
 
-            appData.reviews.push(newReview);
-            saveData();
+            setBtnLoading('btnSubmitReview', true, '<i class="fas fa-paper-plane"></i> ส่งรีวิวเลย!');
+
+            const { error } = await supabaseClient.from('reviews').insert([newReview]);
+
+            setBtnLoading('btnSubmitReview', false, '<i class="fas fa-paper-plane"></i> ส่งรีวิวเลย!');
+
+            if (error) {
+                showMessage("ผิดพลาด", "ไม่สามารถส่งรีวิวได้ในขณะนี้: " + error.message);
+                return;
+            }
+
+            // ล้างฟอร์ม
             document.querySelectorAll('.score-radio').forEach(r => r.checked = false);
             document.getElementById('reviewName').value = '';
             document.getElementById('reviewHideName').checked = false;
             document.getElementById('reviewText').value = '';
             clearReviewImage();
-            showMessage("สำเร็จ!", "ขอบคุณสำหรับรีวิวนะคะ ข้อมูลของคุณถูกส่งเรียบร้อยแล้วค่ะ");
             
+            // อัปเดตข้อมูลใหม่
+            await fetchAllData();
+            showMessage("สำเร็จ!", "ขอบคุณสำหรับรีวิวนะคะ ข้อมูลของคุณถูกส่งเรียบร้อยแล้วค่ะ");
             switchClientTab('review'); 
         }
 
         function renderAdminSettings() {
-            document.getElementById('a_profilePreview').src = appData.shopInfo.profilePic;
-            document.getElementById('a_shopName').value = appData.shopInfo.name;
-            document.getElementById('a_shopDesc').value = appData.shopInfo.desc;
-            document.getElementById('a_marqueeText').value = appData.shopInfo.marqueeText;
-            document.getElementById('a_showBanner').checked = appData.shopInfo.showBanner;
-            document.getElementById('a_bannerPreview').src = appData.shopInfo.bannerImg;
+            const sInfo = appData.shopInfo;
+            document.getElementById('a_profilePreview').src = sInfo.profile_pic || '';
+            document.getElementById('a_shopName').value = sInfo.name || '';
+            document.getElementById('a_shopDesc').value = sInfo.description || '';
+            document.getElementById('a_marqueeText').value = sInfo.marquee_text || '';
+            document.getElementById('a_showBanner').checked = sInfo.show_banner;
+            document.getElementById('a_bannerPreview').src = sInfo.banner_img || '';
             
-            document.getElementById('a_musicUrl').value = appData.music.url || "";
-            document.getElementById('a_musicStart').value = appData.music.startTime || 0;
+            document.getElementById('a_musicUrl').value = sInfo.music_url || "";
+            document.getElementById('a_musicStart').value = sInfo.music_start_time || 0;
 
             renderAdminContacts();
             renderAdminReviews();
         }
 
-        function saveShopSettings() {
-            appData.shopInfo.name = document.getElementById('a_shopName').value;
-            appData.shopInfo.desc = document.getElementById('a_shopDesc').value;
-            appData.shopInfo.marqueeText = document.getElementById('a_marqueeText').value;
-            appData.shopInfo.showBanner = document.getElementById('a_showBanner').checked;
-            saveData();
-            showMessage("บันทึกสำเร็จ", "ข้อมูลร้านค้าถูกอัปเดตเรียบร้อยแล้วค่ะ");
+        // แอดมิน: บันทึกร้านค้า
+        async function saveShopSettings() {
+            setBtnLoading('btnSaveShop', true, '<i class="fas fa-save mr-2"></i> บันทึกข้อมูลร้านค้า');
+
+            const updates = {
+                name: document.getElementById('a_shopName').value.trim(),
+                description: document.getElementById('a_shopDesc').value.trim(),
+                marquee_text: document.getElementById('a_marqueeText').value.trim(),
+                show_banner: document.getElementById('a_showBanner').checked,
+                profile_pic: document.getElementById('a_profilePreview').src,
+                banner_img: document.getElementById('a_bannerPreview').src
+            };
+
+            const { error } = await supabaseClient
+                .from('shop_settings')
+                .update(updates)
+                .eq('id', appData.shopInfo.id);
+
+            setBtnLoading('btnSaveShop', false, '<i class="fas fa-save mr-2"></i> บันทึกข้อมูลร้านค้า');
+
+            if (error) {
+                showMessage("ผิดพลาด", "ไม่สามารถบันทึกข้อมูลได้: " + error.message);
+            } else {
+                await fetchAllData();
+                showMessage("บันทึกสำเร็จ", "ข้อมูลร้านค้าถูกอัปเดตเรียบร้อยแล้วค่ะ");
+            }
         }
 
         function renderAdminContacts() {
@@ -974,14 +1086,17 @@
                 return;
             }
             appData.contact.forEach(c => {
-                const plat = platforms[c.type] || platforms.website;
+                const plat = platforms[c.platform] || platforms.website;
+                const safeUrl = escapeHTML(c.url);
+                const safeName = escapeHTML(plat.name);
+
                 const html = `
                     <div class="flex items-center justify-between p-3 bg-white border border-stone-200 rounded-xl shadow-sm">
                         <div class="flex items-center gap-3 overflow-hidden">
                             <div class="w-10 h-10 rounded-full flex items-center justify-center text-lg shrink-0 border ${plat.color}"><i class="${plat.icon}"></i></div>
                             <div class="truncate">
-                                <div class="text-xs font-bold text-stone-700">${plat.name}</div>
-                                <div class="text-[10px] text-stone-500 truncate max-w-[150px] sm:max-w-[250px]">${c.link}</div>
+                                <div class="text-xs font-bold text-stone-700">${safeName}</div>
+                                <div class="text-[10px] text-stone-500 truncate max-w-[150px] sm:max-w-[250px]">${safeUrl}</div>
                             </div>
                         </div>
                         <button onclick="removeContact(${c.id})" class="text-red-400 hover:text-white bg-red-50 hover:bg-red-400 w-8 h-8 rounded-full transition flex items-center justify-center shrink-0 shadow-sm">
@@ -993,25 +1108,36 @@
             });
         }
 
-        function addContact() {
-            const type = document.getElementById('newContactType').value;
+        async function addContact() {
+            const platform = document.getElementById('newContactType').value;
             const link = document.getElementById('newContactLink').value.trim();
             if(!link) {
                 showMessage("ข้อมูลไม่ครบ", "กรุณาระบุลิงก์ (URL) ของช่องทางติดต่อด้วยค่ะ");
                 return;
             }
-            if(!appData.contact) appData.contact = [];
-            appData.contact.push({ id: Date.now(), type, link });
+
+            setBtnLoading('btnAddContact', true, 'เพิ่มช่องทาง');
             
-            document.getElementById('newContactLink').value = '';
-            saveData();
-            showMessage("เพิ่มสำเร็จ", "เพิ่มช่องทางติดต่อใหม่เรียบร้อยแล้วค่ะ");
+            const newContact = { platform: platform, url: link };
+            const { error } = await supabaseClient.from('contacts').insert([newContact]);
+
+            setBtnLoading('btnAddContact', false, 'เพิ่มช่องทาง');
+
+            if (error) {
+                showMessage("ผิดพลาด", "ไม่สามารถเพิ่มช่องทางได้");
+            } else {
+                document.getElementById('newContactLink').value = '';
+                await fetchAllData();
+                showMessage("เพิ่มสำเร็จ", "เพิ่มช่องทางติดต่อใหม่เรียบร้อยแล้วค่ะ");
+            }
         }
 
         function removeContact(id) {
-            showMessage("ยืนยันการลบ", "ต้องการลบช่องทางติดต่อนี้ใช่หรือไม่?", true, () => {
-                appData.contact = appData.contact.filter(c => c.id !== id);
-                saveData();
+            showMessage("ยืนยันการลบ", "ต้องการลบช่องทางติดต่อนี้ใช่หรือไม่?", true, async () => {
+                document.getElementById('mainLoading').classList.remove('hidden-view');
+                const { error } = await supabaseClient.from('contacts').delete().eq('id', id);
+                if (!error) await fetchAllData();
+                document.getElementById('mainLoading').classList.add('hidden-view');
             });
         }
 
@@ -1024,10 +1150,15 @@
                 return;
             }
 
-            const sortedReviews = [...appData.reviews].sort((a, b) => b.timestamp - a.timestamp);
-            sortedReviews.forEach(review => {
-                const date = new Date(review.timestamp).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit' });
-                const nameDisplay = review.hideName ? `<span class="text-stone-700">${review.name} <span class="text-[10px] text-pink-500 bg-pink-50 border border-pink-100 px-1.5 py-0.5 rounded-md ml-1"><i class="fas fa-eye-slash mr-1"></i>ซ่อนชื่อหน้าเว็บ</span></span>` : review.name;
+            appData.reviews.forEach(review => {
+                const date = new Date(review.created_at).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit' });
+                
+                const safeName = escapeHTML(review.customer_name);
+                const safeText = escapeHTML(review.review_text);
+                const safeReply = escapeHTML(review.reply_text);
+                const safeImg = escapeHTML(review.image_url);
+
+                const nameDisplay = review.hide_name ? `<span class="text-stone-700">${safeName} <span class="text-[10px] text-pink-500 bg-pink-50 border border-pink-100 px-1.5 py-0.5 rounded-md ml-1"><i class="fas fa-eye-slash mr-1"></i>ซ่อนชื่อหน้าเว็บ</span></span>` : safeName;
                 const scoreText = review.score === 1 ? '<span class="text-emerald-500 text-xs font-bold"><i class="fas fa-arrow-up mr-1"></i>+1 บริการดี</span>' : '<span class="text-stone-500 text-xs font-bold"><i class="fas fa-arrow-down mr-1"></i>-1 บริการแย่</span>';
 
                 const html = `
@@ -1042,14 +1173,14 @@
                             </button>
                         </div>
                         <div class="flex flex-col sm:flex-row gap-3 mb-4">
-                            ${review.image ? `<img src="${review.image}" class="w-24 h-24 object-cover rounded-xl border border-stone-200 shadow-sm">` : ''}
-                            <div class="text-sm font-medium text-stone-600 flex-1 bg-white p-3 border border-stone-100 rounded-xl shadow-inner"><i class="fas fa-quote-left text-pink-300 mr-2 text-xs"></i>${review.text || 'ไม่มีข้อความ'}</div>
+                            ${safeImg ? `<img src="${safeImg}" class="w-24 h-24 object-cover rounded-xl border border-stone-200 shadow-sm">` : ''}
+                            <div class="text-sm font-medium text-stone-600 flex-1 bg-white p-3 border border-stone-100 rounded-xl shadow-inner"><i class="fas fa-quote-left text-pink-300 mr-2 text-xs"></i>${safeText || 'ไม่มีข้อความ'}</div>
                         </div>
                         <div class="bg-pink-50 p-3 rounded-xl border border-pink-100">
                             <label class="block text-xs font-bold text-stone-600 mb-2"><i class="fas fa-reply mr-1 text-pink-400"></i>ตอบกลับของร้านค้า</label>
                             <div class="flex gap-2">
-                                <input type="text" id="replyInput_${review.id}" value="${review.reply}" placeholder="พิมพ์ข้อความตอบกลับที่นี่..." class="flex-1 text-sm font-medium border border-stone-200 rounded-lg px-3 py-2 focus:border-pink-300 outline-none text-stone-700 bg-white">
-                                <button onclick="saveReply(${review.id})" class="bg-gradient-to-r from-pink-400 to-pink-500 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm transition"><i class="fas fa-save mr-1"></i> บันทึก</button>
+                                <input type="text" id="replyInput_${review.id}" value="${safeReply}" placeholder="พิมพ์ข้อความตอบกลับที่นี่..." class="flex-1 text-sm font-medium border border-stone-200 rounded-lg px-3 py-2 focus:border-pink-300 outline-none text-stone-700 bg-white">
+                                <button id="btnReply_${review.id}" onclick="saveReply(${review.id})" class="bg-gradient-to-r from-pink-400 to-pink-500 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm transition"><i class="fas fa-save mr-1"></i> บันทึก</button>
                             </div>
                         </div>
                     </div>
@@ -1058,19 +1189,28 @@
             });
         }
 
-        function saveReply(reviewId) {
+        async function saveReply(reviewId) {
             const replyText = document.getElementById(`replyInput_${reviewId}`).value;
-            const reviewIndex = appData.reviews.findIndex(r => r.id === reviewId);
-            if (reviewIndex !== -1) {
-                appData.reviews[reviewIndex].reply = replyText;
-                saveData();
+            setBtnLoading(`btnReply_${reviewId}`, true, '<i class="fas fa-save mr-1"></i> บันทึก');
+
+            const { error } = await supabaseClient.from('reviews').update({ reply_text: replyText }).eq('id', reviewId);
+            
+            setBtnLoading(`btnReply_${reviewId}`, false, '<i class="fas fa-save mr-1"></i> บันทึก');
+
+            if (error) {
+                showMessage("ผิดพลาด", "ไม่สามารถบันทึกข้อความตอบกลับได้");
+            } else {
+                await fetchAllData();
                 showMessage("สำเร็จ", "บันทึกข้อความตอบกลับเรียบร้อยแล้ว");
             }
         }
+
         function confirmDeleteReview(reviewId) {
-            showMessage("ยืนยันการลบ", "คุณแน่ใจหรือไม่ว่าต้องการลบรีวิวนี้? ข้อมูลคะแนนจะถูกคำนวณใหม่", true, () => {
-                appData.reviews = appData.reviews.filter(r => r.id !== reviewId);
-                saveData();
+            showMessage("ยืนยันการลบ", "คุณแน่ใจหรือไม่ว่าต้องการลบรีวิวนี้? ข้อมูลคะแนนจะถูกคำนวณใหม่", true, async () => {
+                document.getElementById('mainLoading').classList.remove('hidden-view');
+                const { error } = await supabaseClient.from('reviews').delete().eq('id', reviewId);
+                if (!error) await fetchAllData();
+                document.getElementById('mainLoading').classList.add('hidden-view');
             });
         }
 
@@ -1084,7 +1224,7 @@
             return videoID;
         }
 
-        function saveMusicSettings() {
+        async function saveMusicSettings() {
             const url = document.getElementById('a_musicUrl').value;
             const startTime = parseInt(document.getElementById('a_musicStart').value) || 0;
             const videoId = extractVideoID(url);
@@ -1094,13 +1234,30 @@
                 return;
             }
 
-            appData.music.url = url;
-            appData.music.videoId = videoId;
-            appData.music.startTime = startTime;
-            saveData();
-            
-            initMusicPlayer();
-            showMessage("บันทึกสำเร็จ", "ตั้งค่าเพลงเรียบร้อยแล้วค่ะ");
+            setBtnLoading('btnSaveMusic', true, '<i class="fas fa-save mr-2"></i> บันทึกการตั้งค่าเพลง');
+
+            const updates = {
+                music_url: url,
+                music_video_id: videoId,
+                music_start_time: startTime
+            };
+
+            const { error } = await supabaseClient.from('shop_settings').update(updates).eq('id', appData.shopInfo.id);
+            setBtnLoading('btnSaveMusic', false, '<i class="fas fa-save mr-2"></i> บันทึกการตั้งค่าเพลง');
+
+            if (error) {
+                showMessage("ผิดพลาด", "ไม่สามารถบันทึกตั้งค่าเพลงได้");
+            } else {
+                await fetchAllData();
+                initMusicPlayer();
+                showMessage("บันทึกสำเร็จ", "ตั้งค่าเพลงเรียบร้อยแล้วค่ะ");
+            }
+        }
+
+        function onYouTubeIframeAPIReady() {
+            if(appData.shopInfo && appData.shopInfo.music_video_id) {
+                initMusicPlayer();
+            }
         }
 
         function initMusicPlayer() {
@@ -1110,7 +1267,7 @@
             isPlayerReady = false;
             document.getElementById('musicToggleBtn').classList.remove('hidden');
 
-            if(appData.music.videoId) {
+            if(appData.shopInfo.music_video_id) {
                 if(ytPlayer && typeof ytPlayer.destroy === 'function') {
                     ytPlayer.destroy();
                 }
@@ -1118,13 +1275,13 @@
                 ytPlayer = new YT.Player('ytPlayerDiv', {
                     height: '1', 
                     width: '1',
-                    videoId: appData.music.videoId,
+                    videoId: appData.shopInfo.music_video_id,
                     playerVars: {
                         'autoplay': 1,
                         'controls': 0,
                         'disablekb': 1,
                         'fs': 0,
-                        'start': appData.music.startTime,
+                        'start': appData.shopInfo.music_start_time || 0,
                         'playsinline': 1,
                         'rel': 0
                     },
@@ -1176,8 +1333,17 @@
         function showMessage(title, message, isConfirm = false, onConfirm = null) {
             const modal = document.getElementById('customModal');
             const modalContent = document.getElementById('modalContent');
+            const modalIcon = document.getElementById('modalIcon');
+
             document.getElementById('modalTitle').innerText = title;
             document.getElementById('modalMessage').innerText = message;
+            
+            if (title.includes("ผิดพลาด") || title.includes("ไม่สำเร็จ")) {
+                modalIcon.className = "fas fa-exclamation-triangle text-5xl text-red-400 mb-4 animate-bounce";
+            } else {
+                modalIcon.className = "fas fa-crown text-5xl text-pink-400 mb-4 animate-bounce";
+            }
+
             const actionsDiv = document.getElementById('modalActions');
             if (isConfirm) {
                 modalConfirmAction = onConfirm;
@@ -1205,9 +1371,6 @@
 
         function initEffects() {
             const icons = ['fa-heart', 'fa-star', 'fa-sparkles'];
-            
-            // เอาโค้ด setInterval สำหรับ Background floaters ออก
-
             document.addEventListener('click', (e) => {
                 if(e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.closest('.liquid-glass') || e.target.closest('button')) return;
                 const burstCount = 5;
